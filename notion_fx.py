@@ -1,6 +1,7 @@
 ﻿import requests
 import mlfiles
 import datetime
+import time
 from dateutil import parser
 from dateutil.tz import tzoffset
 
@@ -127,28 +128,49 @@ def split_paragraph(paragraph):
 
 
 
-def get_pages(database_id, filters, headers):
+def get_pages(database_id, filters, headers, page_size=100, max_retries=5):
+    """Fetch every page in a database, honoring pagination and rate limits."""
+
     all_results = []
     start_cursor = None
-    has_more = True
 
-    while has_more:
-        body = {
-            "filter": filters
-        }
+    while True:
+        body = {"page_size": page_size}
+        if filters:
+            body["filter"] = filters
         if start_cursor:
             body["start_cursor"] = start_cursor
 
-        response = requests.post(f"https://api.notion.com/v1/databases/{database_id}/query", headers=headers, json=body)
+        retries = 0
+        while True:
+            response = requests.post(
+                f"https://api.notion.com/v1/databases/{database_id}/query",
+                headers=headers,
+                json=body,
+            )
 
-        if response.status_code == 200:
-            data = response.json()
-            all_results.extend(data["results"])
-            has_more = data.get("has_more", False)
-            start_cursor = data.get("next_cursor", None)
-        else:
-            # Optionally handle errors more gracefully or log them
+            if response.status_code == 200:
+                data = response.json()
+                break
+
+            if response.status_code == 429 and retries < max_retries:
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    wait_time = float(retry_after) if retry_after is not None else 1 + retries
+                except ValueError:
+                    wait_time = 1 + retries
+                time.sleep(wait_time)
+                retries += 1
+                continue
+
+            response.raise_for_status()
+
+        all_results.extend(data["results"])
+
+        if not data.get("has_more"):
             break
+
+        start_cursor = data.get("next_cursor")
 
     return all_results
 
