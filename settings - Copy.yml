@@ -1,0 +1,18 @@
+﻿not_using:
+notion:
+    token: 
+    checklist_db: 
+    type: Type
+    units: Units
+    number: on
+    last_date:
+        - previous
+        - previous_raw
+    next_date: next_date
+    scheduled: Scheduled
+options:
+    use_scheduled: true
+
+
+
+
